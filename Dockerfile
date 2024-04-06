@@ -14,21 +14,52 @@
 # Download and verify the integrity of the download first
 
 FROM ubuntu:22.04
-RUN apt-get update && \
-    apt-get -y install apt-transport-https \
+ARG DOCKER_COMPOSE_VERSION=v2.23.0
+ARG ARCH="x86_64"
+
+# -- Be sure to use these dockerfiles as references:
+# https://github.com/actions/actions-runner-controller/blob/master/runner/actions-runner-dind.ubuntu-22.04.dockerfile
+# https://github.com/terraform-google-modules/terraform-google-github-actions-runners/blob/master/examples/gh-runner-mig-container-vm-dind/Dockerfile
+RUN apt-get update -y \
+    && apt-get install -y software-properties-common \
+    && add-apt-repository -y ppa:git-core/ppa \
+    && apt-get update -y \
+    && apt-get install -y --no-install-recommends \
+    apt-transport-https \
+    build-essential \
     ca-certificates \
     curl \
-    tar \
-    jq \
-    build-essential \
     gnupg2 \
+    iptables \
     iputils-ping \
-    software-properties-common
+    jq \
+    software-properties-common \
+    tar \
+    unzip \
+    zip \
+    # libyaml-dev is required for ruby/setup-ruby action.
+    # It is installed after installdependencies.sh and before removing /var/lib/apt/lists
+    # to avoid rerunning apt-update on its own.
+    && apt-get install -y libyaml-dev \
+    && rm -rf /var/lib/apt/lists/*
 
+# Download latest git-lfs version
+RUN curl -s https://packagecloud.io/install/repositories/github/git-lfs/script.deb.sh | bash && \
+    apt-get install -y --no-install-recommends git-lfs
+
+# Install Docker
 RUN curl -fsSL https://download.docker.com/linux/ubuntu/gpg | apt-key add - && \
     add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/ubuntu bionic stable" && \
     apt-get update && \
     apt-get -y install docker-ce
+
+# Install Docker Compose
+RUN mkdir -p /usr/libexec/docker/cli-plugins \
+    && curl -fLo /usr/libexec/docker/cli-plugins/docker-compose https://github.com/docker/compose/releases/download/${DOCKER_COMPOSE_VERSION}/docker-compose-linux-${ARCH} \
+    && chmod +x /usr/libexec/docker/cli-plugins/docker-compose \
+    && ln -s /usr/libexec/docker/cli-plugins/docker-compose /usr/bin/docker-compose \
+    && which docker-compose \
+    && docker compose version
 
 ARG GH_RUNNER_VERSION="2.294.0"
 WORKDIR /runner
