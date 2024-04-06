@@ -21,7 +21,6 @@ variable "project_id" {
 variable "region" {
   type        = string
   description = "The GCP region to deploy instances into"
-  default     = "us-east4"
 }
 
 variable "network_name" {
