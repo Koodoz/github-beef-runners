@@ -30,7 +30,7 @@ RUN curl -fsSL https://download.docker.com/linux/ubuntu/gpg | apt-key add - && \
     apt-get update && \
     apt-get -y install docker-ce
 
-ARG GH_RUNNER_VERSION="2.169.0"
+ARG GH_RUNNER_VERSION="2.294.0"
 WORKDIR /runner
 RUN curl -o actions.tar.gz --location "https://github.com/actions/runner/releases/download/v${GH_RUNNER_VERSION}/actions-runner-linux-x64-${GH_RUNNER_VERSION}.tar.gz" && \
     tar -zxf actions.tar.gz && \
