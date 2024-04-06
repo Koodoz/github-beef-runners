@@ -146,9 +146,12 @@ module "gce-container" {
 
 
 module "mig_template" {
+  for_each = var.runner_types
+
   source             = "terraform-google-modules/vm/google//modules/instance_template"
   version            = "~> 11.0"
   project_id         = var.project_id
+  machine_type       = each.value.gcp_machine_type
   region             = var.region
   network            = local.network_name
   subnetwork         = local.subnet_name
@@ -162,7 +165,7 @@ module "mig_template" {
   disk_size_gb         = 100
   disk_type            = "pd-ssd"
   auto_delete          = true
-  name_prefix          = "gh-runner"
+  name_prefix          = "gh-runner-${each.value.name_suffix}"
   source_image_family  = "cos-stable"
   source_image_project = "cos-cloud"
   startup_script       = "export TEST_ENV='hello'"
@@ -178,14 +181,16 @@ module "mig_template" {
 /*****************************************
   Runner MIG
  *****************************************/
+# Create a Managed Instance Group for each instance of the runner_types map
 module "mig" {
+  for_each = var.runner_types
+
   source             = "terraform-google-modules/vm/google//modules/mig"
   version            = "~> 11.0"
   project_id         = var.project_id
-  subnetwork_project = var.project_id
-  hostname           = local.instance_name
+  hostname           = "${local.instance_name}-${each.key}"
   region             = var.region
-  instance_template  = module.mig_template.self_link
+  instance_template  = module.mig_template[each.key].self_link # module.mig_template.self_link
   target_size        = var.target_size
 
   /* autoscaler */

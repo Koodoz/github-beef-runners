@@ -85,6 +85,14 @@ variable "instance_name" {
   default     = "gh-runner"
 }
 
+variable "runner_types" {
+  type = map(object({
+    name_suffix = string
+    gcp_machine_type = string
+  }))
+  description = "The types of runners to create. It allows users to quickly create multiple types of runners"
+}
+
 variable "target_size" {
   type        = number
   description = "The number of runner instances"

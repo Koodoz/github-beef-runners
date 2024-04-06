@@ -23,5 +23,6 @@ module "runner-mig-dind" {
   org_name       = var.org_name
   org_url        = var.org_url
   gh_token       = var.gh_token
+  runner_types   = var.runner_types
   dind           = true
 }
