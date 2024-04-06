@@ -19,6 +19,12 @@ variable "project_id" {
   description = "The project id to deploy Github Runner Managed Instance Group (MIG)"
 }
 
+variable "region" {
+  type        = string
+  description = "The region to deploy Github Runner Managed Instance Group (MIG)"
+  default = "us-central1"
+}
+
 variable "image" {
   type        = string
   description = "The github runner image"
