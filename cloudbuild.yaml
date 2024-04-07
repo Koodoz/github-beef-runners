@@ -20,7 +20,7 @@ steps:
         "-t",
         "gcr.io/$PROJECT_ID/gh-actions-runner:latest",
         "-t",
-        "gcr.io/$PROJECT_ID/gh-actions-runner:0.1",
+        "gcr.io/$PROJECT_ID/gh-actions-runner:0.1.1",
         ".",
       ]
 images:

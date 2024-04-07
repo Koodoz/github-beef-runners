@@ -37,10 +37,13 @@ RUN apt-get update -y \
     tar \
     unzip \
     zip \
+    # install Yarn as its required by the setup-node action just to run -_-
+    # @see: https://github.com/actions/setup-node/issues/504
+    && apt-get install -y --no-install-recommends npm && npm install -g yarn \
     # libyaml-dev is required for ruby/setup-ruby action.
     # It is installed after installdependencies.sh and before removing /var/lib/apt/lists
     # to avoid rerunning apt-update on its own.
-    && apt-get install -y libyaml-dev \
+    && apt-get install -y --no-install-recommends libyaml-dev \
     && rm -rf /var/lib/apt/lists/*
 
 # Download latest git-lfs version
