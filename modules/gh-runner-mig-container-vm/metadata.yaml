@@ -125,11 +125,6 @@ spec:
     type: string
     default: ""
     required: false
-  - name: target_size
-    description: The number of runner instances
-    type: number
-    default: 2
-    required: false
   outputs:
   - name: mig_instance_group
     description: The instance group url of the created MIG

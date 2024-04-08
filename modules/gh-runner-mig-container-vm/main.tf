@@ -1,19 +1,3 @@
-/**
- * Copyright 2020 Google LLC
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
-
 locals {
   dindVolumeMounts = var.dind ? [{
     mountPath = "/var/run/docker.sock"
@@ -96,10 +80,12 @@ resource "google_project_iam_binding" "gce" {
   Runner GCE Instance Template
  *****************************************/
 locals {
-  instance_name = format("%s-%s", var.instance_name, substr(md5(module.gce-container.container.image), 0, 8))
+  instance_name = format("%s-%s", var.instance_name, substr(md5(var.image), 0, 8))
 }
 
 module "gce-container" {
+  for_each = var.runner_types
+
   source  = "terraform-google-modules/container-vm/google"
   version = "~> 3.0"
   container = {
@@ -108,6 +94,10 @@ module "gce-container" {
       {
         name  = "ACTIONS_RUNNER_INPUT_URL"
         value = var.org_url
+      },
+      {
+        name = "ACTIONS_RUNNER_INPUT_LABELS"
+        value = each.key,
       },
       {
         name  = "GITHUB_TOKEN"
@@ -169,13 +159,14 @@ module "mig_template" {
   source_image_family  = "cos-stable"
   source_image_project = "cos-cloud"
   startup_script       = "export TEST_ENV='hello'"
-  source_image         = reverse(split("/", module.gce-container.source_image))[0]
-  metadata             = merge(var.additional_metadata, { "gce-container-declaration" = module.gce-container.metadata_value })
+  source_image         = reverse(split("/", module.gce-container[each.key].source_image))[0]
+  metadata             = merge(var.additional_metadata, { "gce-container-declaration" = module.gce-container[each.key].metadata_value })
+  spot                 = each.value.is_spot_instance
   tags = [
     "gh-runner-vm"
   ]
   labels = {
-    container-vm = module.gce-container.vm_container_label
+    container-vm = module.gce-container[each.key].vm_container_label
   }
 }
 /*****************************************
@@ -191,9 +182,95 @@ module "mig" {
   hostname           = "${local.instance_name}-${each.key}"
   region             = var.region
   instance_template  = module.mig_template[each.key].self_link # module.mig_template.self_link
-  target_size        = var.target_size
 
   /* autoscaler */
   autoscaling_enabled = true
+  autoscaling_mode    = "metric"
+  autoscaling_metric  = tolist([{
+    name   = google_monitoring_metric_descriptor.metric_required_runner_count.type
+    target = 1 
+    type   = "GAUGE"
+  }])
+  min_replicas        = each.value.min_replicas
+  max_replicas        = each.value.max_replicas
   cooldown_period     = var.cooldown_period
+}
+
+
+/*****************************************
+  Github Runner Webhook Cloud Function
+ *****************************************/
+resource "random_id" "default" {
+  byte_length = 8
+}
+
+data "archive_file" "webhook" {
+  type        = "zip"
+  output_path = "/tmp/beef-process-webhook.zip"
+  source_dir  = "${path.module}/function-process-webhook/"
+}
+
+resource "google_storage_bucket" "functions" {
+  name     = "beef-runner-${random_id.default.hex}-cloudfunction-source"
+  location = "US"
+  project  = var.project_id
+  uniform_bucket_level_access = true
+}
+
+resource "google_storage_bucket_object" "function" {
+  name   = "process-webhook-function-source.zip"
+  bucket = google_storage_bucket.functions.name
+  source = data.archive_file.webhook.output_path # Add path to the zipped function source code
+}
+
+resource "google_monitoring_metric_descriptor" "metric_required_runner_count" {
+  project         = var.project_id
+  description     = "The number of required runners needed to fulfill all current Github jobs"
+  display_name    = "metric-required-runner-count"
+  type            = "custom.googleapis.com/beef_github_runner/required_runner_count"
+  metric_kind     = "GAUGE"
+  value_type      = "INT64"
+  metadata {
+    sample_period = "5s"
+    ingest_delay  = "1s"
+  }
+}
+
+resource "google_cloudfunctions2_function" "fn_process_webhook" {
+  name        = "fn_process_webhook"
+  location    = var.region 
+  project     = var.project_id
+  description = "A function to process Github Webhooks for the Beef Runner. It's primarily used to trigger the autoscaler so that the runner can scale up or down based on the number of jobs in the queue."
+
+  build_config {
+    runtime     = "nodejs20"
+    entry_point = "processGithubRunnerWebhook"
+    source {
+      storage_source {
+        bucket = google_storage_bucket.functions.name
+        object = google_storage_bucket_object.function.name
+      }
+    }
+  }
+
+  service_config {
+    available_cpu       = "0.5"
+    available_memory   = "128Mi"
+    timeout_seconds    = 60
+    environment_variables = {
+      PROJECT_ID              = var.project_id
+      STACKDRIVER_METRIC_NAME = google_monitoring_metric_descriptor.metric_required_runner_count.type
+      GITHUB_WEBHOOK_SECRET = var.gh_webhook_secret
+    }
+    ingress_settings = "ALLOW_ALL"
+  }
+}
+
+# Allow all users to invoke the Cloud Function
+resource "google_cloud_run_service_iam_member" "iam_member" {
+  location = google_cloudfunctions2_function.fn_process_webhook.location
+  project  = google_cloudfunctions2_function.fn_process_webhook.project
+  service  = google_cloudfunctions2_function.fn_process_webhook.name
+  role     = "roles/run.invoker"
+  member   = "allUsers"
 }

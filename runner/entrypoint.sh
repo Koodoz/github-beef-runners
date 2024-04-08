@@ -32,7 +32,13 @@ ACTIONS_RUNNER_INPUT_NAME=$HOSTNAME
 #get regsistration token for this runnner
 ACTIONS_RUNNER_INPUT_TOKEN="$(curl -sS --request POST --url "https://api.github.com/orgs/${ORG_NAME}/actions/runners/registration-token" --header "authorization: Bearer ${GITHUB_TOKEN}"  --header 'content-type: application/json' | jq -r .token)"
 #configure runner
-/runner/config.sh --unattended --replace --work "/tmp" --url "$ACTIONS_RUNNER_INPUT_URL" --token "$ACTIONS_RUNNER_INPUT_TOKEN"
+/runner/config.sh \
+  --unattended \
+  --replace \
+  --work "/tmp" \
+  --url "$ACTIONS_RUNNER_INPUT_URL" \
+  --token "$ACTIONS_RUNNER_INPUT_TOKEN" \
+  --labels "$ACTIONS_RUNNER_INPUT_LABELS"
 #start runner
 #https://github.com/actions/runner/issues/246#issuecomment-615293718
 /runner/bin/runsvc.sh & wait $!

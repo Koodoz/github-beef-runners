@@ -9,6 +9,16 @@ The name is inspired by this [classic commercial](https://www.youtube.com/watch?
 
 By allowing you to host your own Github runners in GCP for a fraction of the cost, you can get the beefy performance you need.
 
+### A note on autoscaling
+
+Since we are directly running on instances instead of through Kubernetes, we can't use something like [ARC](https://github.com/actions/actions-runner-controller). Instead, for autoscaling, we are going to rely on [simple metrics based autoscaling](https://cloud.google.com/compute/docs/autoscaler/scaling-cloud-monitoring-metrics#configure_autoscaling_based_on_metrics).
+
+We will do the following:
+
+1. Register a custom metric in GCP that will be used to determine the number of runners needed. This will be a simple gauge that will equal running count + pending jobs count. 
+2. Register a API Gateway wired up to a Cloud Function that will update the metric based off Github webhooks.
+3. Create a autoscaler that will scale up and down based off the metric.
+
 
 ## Installation
 
@@ -17,12 +27,12 @@ By allowing you to host your own Github runners in GCP for a fraction of the cos
    gcloud config set project <gcp-project-id>
 
    # Enable the necessary APIs
-   # Container Registry + Cloudbuild APIs are required for Docker image building
-   # Compute Engine API is required for creating the VMs
+   # - Container Registry + Cloudbuild APIs are required for Docker image building
+   # - Compute Engine API is required for creating the VMs
    gcloud services enable containerregistry.googleapis.com cloudbuild.googleapis.com compute.googleapis.com
    ```
 
-2. Build the Docker image via cloudbuild: `gcloud builds submit --config=cloudbuild.yaml`
+2. Build the Docker image via cloudbuild: `gcloud builds submit --config=cloudbuild.yaml runner/`
 
 3. Create a `terraform.tfvars` file with the following content:
    ```hcl

@@ -44,3 +44,6 @@ output "service_account" {
   value       = local.service_account
 }
 
+output "webhook_function_uri" { 
+  value = google_cloudfunctions2_function.fn_process_webhook.service_config[0].uri
+}

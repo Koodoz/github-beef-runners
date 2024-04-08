@@ -1,0 +1,16 @@
+{
+  "name": "function-process-webhook",
+  "version": "0.0.1",
+  "description": "A GCP cloud function to respond to a Github 'workflow_job' webhooks",
+  "main": "index.js",
+  "private": true,
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@google-cloud/functions-framework": "^3.3.0",
+    "@google-cloud/monitoring": "^4.0.0"
+  }
+}

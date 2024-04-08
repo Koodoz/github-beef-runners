@@ -43,12 +43,22 @@ variable "org_name" {
 variable "gh_token" {
   type        = string
   description = "Github token that is used for generating Self Hosted Runner Token"
+  sensitive = true
+}
+
+variable "gh_webhook_secret" {
+  type        = string
+  description = "The Secret passed by the Github webhook which will be used to validate the incoming request"
+  sensitive = true
 }
 
 variable "runner_types" {
   type = map(object({
     name_suffix = string
     gcp_machine_type = string
+    is_spot_instance = bool
+    min_replicas = number
+    max_replicas = number
   }))
   description = "The types of runners to create. It allows users to quickly create multiple types of runners"
 }

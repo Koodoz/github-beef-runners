@@ -18,3 +18,6 @@ test.out
 
 # tf lock file
 .terraform.lock.hcl
+
+# For the JS cloudfunction
+node_modules

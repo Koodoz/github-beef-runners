@@ -17,13 +17,14 @@
 module "runner-mig-dind" {
   source  = "./modules/gh-runner-mig-container-vm"
 
-  create_network = true
-  project_id     = var.project_id
-  image          = var.image
-  org_name       = var.org_name
-  org_url        = var.org_url
-  gh_token       = var.gh_token
-  runner_types   = var.runner_types
-  region         = var.region
-  dind           = true
+  create_network    = true
+  project_id        = var.project_id
+  image             = var.image
+  org_name          = var.org_name
+  org_url           = var.org_url
+  gh_token          = var.gh_token
+  gh_webhook_secret = var.gh_webhook_secret
+  runner_types      = var.runner_types
+  region            = var.region
+  dind              = true
 }
