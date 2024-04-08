@@ -3,7 +3,6 @@
 const crypto = require('crypto');
 const { http } = require('@google-cloud/functions-framework');
 const { MetricServiceClient } = require('@google-cloud/monitoring');
-const escapeHtml = require('escape-html');
 
 // ==== ENV variables ====
 const GITHUB_WEBHOOK_SECRET = process.env.GITHUB_WEBHOOK_SECRET;
@@ -12,13 +11,19 @@ const PROJECT_ID = process.env.PROJECT_ID;
 
 const metricsClient = new MetricServiceClient();
 
-const isValidRequestFromGithub = async (req) => { 
-  const signature = crypto
-    .createHmac("sha256", GITHUB_WEBHOOK_SECRET)
+const isValidRequestFromGithub = async (req) => {
+  const expectedSignature = crypto
+    .createHmac('sha256', GITHUB_WEBHOOK_SECRET)
     .update(JSON.stringify(req.body))
-    .digest("hex");
-  const expected = Buffer.from(`sha256=${signature}`, 'utf8');
-  const actual =  Buffer.from(req.get("x-hub-signature-256"), 'utf8');
+    .digest('hex');
+  const actualSignature = req.get('x-hub-signature-256');
+
+  if (!actualSignature) {
+    console.log('No signature specified', actualSignature);
+    return false;
+  }
+  const expected = Buffer.from(`sha256=${expectedSignature}`, 'utf8');
+  const actual = Buffer.from(actualSignature, 'utf8');
 
   try {
     return crypto.timingSafeEqual(expected, actual);
@@ -28,16 +33,12 @@ const isValidRequestFromGithub = async (req) => {
 };
 
 const fetchCurrentGaugeValue = async () => {
-  // TODO: This is...not an ideal implementation as with enough concurrent
-  //       webhook requests, there will be a race condition where the value
-  //       could change _after_ this function reads it. This is a known issue
-  //       and will be addressed in a future iteration.
   const request = {
     name: `projects/${PROJECT_ID}/metricDescriptors/${STACKDRIVER_METRIC_NAME}`,
   };
 
-  await metricsClient.getMetricDescriptor(request);
-  const currentValue = descriptor.metadataValue;
+  const descriptor = await metricsClient.getMetricDescriptor(request);
+  return descriptor.metadataValue;
 };
 
 const setNewGaugeValue = async (newValue) => {
@@ -51,18 +52,20 @@ const setNewGaugeValue = async (newValue) => {
         project_id: PROJECT_ID,
       },
     },
-    points: [{
-      interval: {
-        endTime: {
-          seconds: Date.now() / 1000,
+    points: [
+      {
+        interval: {
+          endTime: {
+            seconds: Date.now() / 1000,
+          },
+        },
+        value: {
+          int64Value: newValue,
         },
       },
-      value: {
-        int64Value: newValue,
-      }
-    }]
+    ],
   };
-  await metricClient.createTimeSeries(request);
+  await metricsClient.createTimeSeries(request);
 };
 
 const determineNewGaugeValue = async (webhookPayload, currentValue) => {
@@ -76,7 +79,7 @@ const determineNewGaugeValue = async (webhookPayload, currentValue) => {
       return currentValue + 1;
     default:
       return currentValue;
-  };
+  }
 };
 
 /**
@@ -91,12 +94,16 @@ http('processGithubRunnerWebhook', async (req, res) => {
     return res.status(401);
   }
 
+  // TODO: This is...not an ideal implementation as with enough concurrent
+  //       webhook requests, there will be a race condition where the value
+  //       could change _after_ this function reads it. This is a known issue
+  //       and will be addressed in a future iteration.
   const currentValue = await fetchCurrentGaugeValue();
   const newValue = await determineNewGaugeValue(req.body, currentValue);
 
   if (currentValue !== newValue) {
     setNewGaugeValue(newValue);
   }
-  
+
   return res.status(204);
 });

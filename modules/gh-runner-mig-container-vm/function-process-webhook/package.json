@@ -5,7 +5,8 @@
   "main": "index.js",
   "private": true,
   "scripts": {
-    "test": "jest"
+    "test": "jest",
+    "prettier": "prettier --write ."
   },
   "author": "",
   "license": "ISC",
@@ -16,5 +17,10 @@
   "devDependencies": {
     "jest": "^29.7.0",
     "prettier": "^3.2.5"
+  },
+  "prettier": {
+    "singleQuote": true,
+    "trailingComma": "all",
+    "tabWidth": 2
   }
 }
