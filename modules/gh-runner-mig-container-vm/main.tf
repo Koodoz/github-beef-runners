@@ -204,10 +204,18 @@ resource "random_id" "default" {
   byte_length = 8
 }
 
+locals {
+  function_source_dir = "${path.module}/function-process-webhook"
+}
+
 data "archive_file" "webhook" {
   type        = "zip"
-  output_path = "/tmp/beef-process-webhook.zip"
-  source_dir  = "${path.module}/function-process-webhook/"
+
+  # We use the md5 of the index.js file to generate a unique name for the zip file to force re-zipping of the contents 
+  # when the source changes
+  output_path = "/tmp/beef-process-webhook-${filemd5("${local.function_source_dir}/index.js")}.zip"
+  source_dir  = local.function_source_dir
+  excludes    = tolist(["index.test.js"])
 }
 
 resource "google_storage_bucket" "functions" {
@@ -217,7 +225,7 @@ resource "google_storage_bucket" "functions" {
   uniform_bucket_level_access = true
 }
 
-resource "google_storage_bucket_object" "function" {
+resource "google_storage_bucket_object" "sourcecode" {
   name   = "process-webhook-function-source.zip"
   bucket = google_storage_bucket.functions.name
   source = data.archive_file.webhook.output_path # Add path to the zipped function source code
@@ -237,7 +245,7 @@ resource "google_monitoring_metric_descriptor" "metric_required_runner_count" {
 }
 
 resource "google_cloudfunctions2_function" "fn_process_webhook" {
-  name        = "fn_process_webhook"
+  name        = "fn-process-webhook"
   location    = var.region 
   project     = var.project_id
   description = "A function to process Github Webhooks for the Beef Runner. It's primarily used to trigger the autoscaler so that the runner can scale up or down based on the number of jobs in the queue."
@@ -248,7 +256,7 @@ resource "google_cloudfunctions2_function" "fn_process_webhook" {
     source {
       storage_source {
         bucket = google_storage_bucket.functions.name
-        object = google_storage_bucket_object.function.name
+        object = google_storage_bucket_object.sourcecode.name
       }
     }
   }
@@ -260,16 +268,25 @@ resource "google_cloudfunctions2_function" "fn_process_webhook" {
     environment_variables = {
       PROJECT_ID              = var.project_id
       STACKDRIVER_METRIC_NAME = google_monitoring_metric_descriptor.metric_required_runner_count.type
-      GITHUB_WEBHOOK_SECRET = var.gh_webhook_secret
+      GITHUB_WEBHOOK_SECRET   = var.gh_webhook_secret
+
+      # Causes a re-deploy of the function when the source changes
+      VERSION_SHA             = data.archive_file.webhook.output_sha
     }
     ingress_settings = "ALLOW_ALL"
   }
+
+  lifecycle {
+    replace_triggered_by  = [
+      google_storage_bucket_object.sourcecode
+    ]
+  }
 }
 
-# Allow all users to invoke the Cloud Function
-resource "google_cloud_run_service_iam_member" "iam_member" {
-  location = google_cloudfunctions2_function.fn_process_webhook.location
+# Allow all users to invoke the Cloud Run service
+resource "google_cloud_run_service_iam_member" "cloud_run_invoker" {
   project  = google_cloudfunctions2_function.fn_process_webhook.project
+  location = google_cloudfunctions2_function.fn_process_webhook.location
   service  = google_cloudfunctions2_function.fn_process_webhook.name
   role     = "roles/run.invoker"
   member   = "allUsers"

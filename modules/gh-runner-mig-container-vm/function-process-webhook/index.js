@@ -18,8 +18,13 @@ const isValidRequestFromGithub = async (req) => {
     .update(JSON.stringify(req.body))
     .digest("hex");
   const expected = Buffer.from(`sha256=${signature}`, 'utf8');
-  const actual =  Buffer.from(req.headers.get("x-hub-signature-256"), 'utf8');
-  return crypto.timingSafeEqual(expected, actual);
+  const actual =  Buffer.from(req.get("x-hub-signature-256"), 'utf8');
+
+  try {
+    return crypto.timingSafeEqual(expected, actual);
+  } catch (RangeError) {
+    return false;
+  }
 };
 
 const fetchCurrentGaugeValue = async () => {
@@ -30,6 +35,7 @@ const fetchCurrentGaugeValue = async () => {
   const request = {
     name: `projects/${PROJECT_ID}/metricDescriptors/${STACKDRIVER_METRIC_NAME}`,
   };
+
   await metricsClient.getMetricDescriptor(request);
   const currentValue = descriptor.metadataValue;
 };
@@ -92,5 +98,5 @@ http('processGithubRunnerWebhook', async (req, res) => {
     setNewGaugeValue(newValue);
   }
   
-  return res.status(200);
+  return res.status(204);
 });
