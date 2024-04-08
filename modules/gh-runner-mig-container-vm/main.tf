@@ -284,10 +284,19 @@ resource "google_cloudfunctions2_function" "fn_process_webhook" {
 }
 
 # Allow all users to invoke the Cloud Run service
-resource "google_cloud_run_service_iam_member" "cloud_run_invoker" {
-  project  = google_cloudfunctions2_function.fn_process_webhook.project
-  location = google_cloudfunctions2_function.fn_process_webhook.location
-  service  = google_cloudfunctions2_function.fn_process_webhook.name
-  role     = "roles/run.invoker"
-  member   = "allUsers"
+data "google_iam_policy" "noauth" {
+  binding {
+    role = "roles/run.invoker"
+    members = [
+      "allUsers",
+    ]
+  }
+}
+
+resource "google_cloud_run_service_iam_policy" "noauth" {
+  project     = google_cloudfunctions2_function.fn_process_webhook.project
+  location    = google_cloudfunctions2_function.fn_process_webhook.location
+  service     = google_cloudfunctions2_function.fn_process_webhook.name
+
+  policy_data = data.google_iam_policy.noauth.policy_data
 }
